@@ -1,29 +1,31 @@
-import { useEffect, useState } from "react";
-import api from "./services/api";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+
+import Login from "./pages/Login";
+import Register from "./pages/Register";
+import Dashboard from "./pages/Dashboard";
+
+import ProtectedRoute from "./components/ProtectedRoute";
 
 function App() {
-  const [message, setMessage] = useState("Checking API...");
-
-  useEffect(() => {
-    const checkApi = async () => {
-      try {
-        const response = await api.get("/api/health");
-
-        setMessage(response.data.message);
-      } catch (error) {
-        console.error(error);
-        setMessage("Unable to connect to API");
-      }
-    };
-
-    checkApi();
-  }, []);
-
   return (
-    <div>
-      <h1>DocuMind</h1>
-      <p>{message}</p>
-    </div>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+
+        <Route path="/login" element={<Login />} />
+
+        <Route path="/register" element={<Register />} />
+
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+      </Routes>
+    </BrowserRouter>
   );
 }
 

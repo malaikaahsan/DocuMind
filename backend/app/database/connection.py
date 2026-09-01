@@ -1,15 +1,28 @@
-from motor.motor_asyncio import AsyncIOMotorClient
-from app.config import settings
+from pymongo import AsyncMongoClient
+from beanie import init_beanie
 
-client = AsyncIOMotorClient(settings.MONGO_URI)
+from app.config import settings
+from app.models.user import User
+
+
+client = AsyncMongoClient(settings.MONGO_URI)
 
 database = client[settings.DATABASE_NAME]
 
+
 async def connect_to_mongodb():
     await client.admin.command("ping")
+
+    await init_beanie(
+        database=database,
+        document_models=[
+            User,
+        ],
+    )
+
     print("MongoDB connected successfully")
 
 
 async def close_mongodb_connection():
-    client.close()
+    await client.close()
     print("MongoDB connection closed")
