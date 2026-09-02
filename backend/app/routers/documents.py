@@ -4,6 +4,7 @@ from beanie import PydanticObjectId
 
 from fastapi import (
     APIRouter,
+    BackgroundTasks,
     Depends,
     File,
     HTTPException,
@@ -14,6 +15,9 @@ from fastapi import (
 from app.dependencies.auth import get_current_user
 from app.models.document import DocumentRecord
 from app.models.user import User
+from app.models.document_chunk import DocumentChunk
+
+from app.services.document_processor import process_pdf
 
 router = APIRouter(
     prefix="/api/documents",
@@ -26,8 +30,44 @@ MAX_FILE_SIZE = 20 * 1024 * 1024
 
 ALLOWED_CONTENT_TYPE = "application/pdf"
 
+async def process_document(document_id: str):
+    document = await DocumentRecord.get(
+        PydanticObjectId(document_id)
+    )
+
+    if not document:
+        return
+
+    try:
+        await DocumentChunk.find(
+            DocumentChunk.document_id == document.id
+        ).delete()
+        result = process_pdf(document.storage_path)
+
+        for chunk in result["chunks"]:
+            document_chunk = DocumentChunk(
+                document_id=document.id,
+                user_id=document.user_id,
+                chunk_index=chunk["chunk_index"],
+                page_number=chunk["page_number"],
+                text=chunk["text"],
+            )
+
+            await document_chunk.insert()
+
+        document.page_count = result["page_count"]
+        document.chunk_count = result["chunk_count"]
+        document.status = "ready"
+
+        await document.save()
+
+    except Exception:
+        document.status = "failed"
+        await document.save()
+
 @router.post("/upload")
 async def upload_document(
+     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
 ):
@@ -75,6 +115,11 @@ async def upload_document(
     )
 
     await document.insert()
+
+    background_tasks.add_task(
+    process_document,
+    str(document.id),
+)
 
     return {
         "message": "Document uploaded successfully",

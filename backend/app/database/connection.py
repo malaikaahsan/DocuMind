@@ -4,6 +4,7 @@ from beanie import init_beanie
 from app.config import settings
 from app.models.user import User
 from app.models.document import DocumentRecord
+from app.models.document_chunk import DocumentChunk
 
 
 client = AsyncMongoClient(settings.MONGO_URI)
@@ -19,6 +20,7 @@ async def connect_to_mongodb():
         document_models=[
             User,
             DocumentRecord,
+            DocumentChunk,
         ],
     )
 

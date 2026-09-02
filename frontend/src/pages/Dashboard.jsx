@@ -34,6 +34,24 @@ function Dashboard() {
     loadDocuments();
   }, []);
 
+  useEffect(() => {
+  const hasProcessingDocument = documents.some(
+    (document) => document.status === "processing"
+  );
+
+  if (!hasProcessingDocument) {
+    return;
+  }
+
+  const interval = setInterval(() => {
+    loadDocuments();
+  }, 3000);
+
+  return () => {
+    clearInterval(interval);
+  };
+}, [documents]);
+
   const handleUpload = async (event) => {
     const file = event.target.files[0];
 
