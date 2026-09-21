@@ -18,6 +18,11 @@ from app.models.user import User
 from app.models.document_chunk import DocumentChunk
 
 from app.services.document_processor import process_pdf
+from app.services.embedding_service import generate_embeddings
+from app.services.vector_store import (
+    add_chunks,
+    delete_document_chunks,
+)
 
 router = APIRouter(
     prefix="/api/documents",
@@ -39,10 +44,44 @@ async def process_document(document_id: str):
         return
 
     try:
+        delete_document_chunks(str(document.id))
+
         await DocumentChunk.find(
             DocumentChunk.document_id == document.id
         ).delete()
+
         result = process_pdf(document.storage_path)
+
+        chunks = result["chunks"]
+
+        chunk_texts = [
+            chunk["text"]
+            for chunk in chunks
+        ]
+
+        embeddings = generate_embeddings(chunk_texts)
+
+        ids = [
+            f"{document.id}_{chunk['chunk_index']}"
+            for chunk in chunks
+        ]
+
+        metadatas = [
+            {
+                "document_id": str(document.id),
+                "user_id": str(document.user_id),
+                "page_number": chunk["page_number"],
+                "chunk_index": chunk["chunk_index"],
+            }
+            for chunk in chunks
+        ]
+
+        add_chunks(
+            ids=ids,
+            documents=chunk_texts,
+            embeddings=embeddings,
+            metadatas=metadatas,
+        )
 
         for chunk in result["chunks"]:
             document_chunk = DocumentChunk(
@@ -219,6 +258,12 @@ async def delete_document(
 
     if os.path.exists(document.storage_path):
         os.remove(document.storage_path)
+
+    delete_document_chunks(str(document.id))
+    
+    await DocumentChunk.find(
+        DocumentChunk.document_id == document.id
+        ).delete() 
 
     await document.delete()
 
