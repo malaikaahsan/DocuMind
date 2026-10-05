@@ -6,6 +6,7 @@ import {
   uploadDocument,
   deleteDocument,
 } from "../services/documentService";
+import { searchDocuments } from "../services/searchService";
 
 import DocumentCard from "../components/DocumentCard";
 
@@ -15,6 +16,10 @@ function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [selectedDocumentId, setSelectedDocumentId] = useState("");
 
   const loadDocuments = async () => {
     try {
@@ -35,22 +40,22 @@ function Dashboard() {
   }, []);
 
   useEffect(() => {
-  const hasProcessingDocument = documents.some(
-    (document) => document.status === "processing"
-  );
+    const hasProcessingDocument = documents.some(
+      (document) => document.status === "processing",
+    );
 
-  if (!hasProcessingDocument) {
-    return;
-  }
+    if (!hasProcessingDocument) {
+      return;
+    }
 
-  const interval = setInterval(() => {
-    loadDocuments();
-  }, 3000);
+    const interval = setInterval(() => {
+      loadDocuments();
+    }, 3000);
 
-  return () => {
-    clearInterval(interval);
-  };
-}, [documents]);
+    return () => {
+      clearInterval(interval);
+    };
+  }, [documents]);
 
   const handleUpload = async (event) => {
     const file = event.target.files[0];
@@ -85,6 +90,31 @@ function Dashboard() {
     }
   };
 
+  const handleSearch = async (event) => {
+    event.preventDefault();
+
+    if (!searchQuery.trim()) {
+      return;
+    }
+
+    try {
+      setSearching(true);
+      setError("");
+
+      const data = await searchDocuments({
+        query: searchQuery,
+        top_k: 5,
+        document_id: selectedDocumentId || null,
+      });
+
+      setSearchResults(data.results);
+    } catch (error) {
+      setError(error.response?.data?.detail || "Search failed");
+    } finally {
+      setSearching(false);
+    }
+  };
+
   return (
     <div>
       <h1>DocuMind Dashboard</h1>
@@ -92,6 +122,61 @@ function Dashboard() {
       <p>You are authenticated.</p>
 
       <button onClick={logout}>Logout</button>
+
+      <div>
+        <h2>Search Documents</h2>
+        <select
+          value={selectedDocumentId}
+          onChange={(event) => setSelectedDocumentId(event.target.value)}
+        >
+          <option value="">All documents</option>
+
+          {documents
+            .filter((document) => document.status === "ready")
+            .map((document) => (
+              <option key={document.id} value={document.id}>
+                {document.original_name}
+              </option>
+            ))}
+        </select>
+        <form onSubmit={handleSearch}>
+          <input
+            type="text"
+            placeholder="Ask something about your documents..."
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+          />
+
+          <button type="submit" disabled={searching}>
+            {searching ? "Searching..." : "Search"}
+          </button>
+        </form>
+      </div>
+
+      {searchResults.length > 0 && (
+        <div>
+          <h3>Search Results</h3>
+
+          {searchResults.map((result) => (
+            <div key={`${result.document_id}-${result.chunk_index}`}>
+              <p>
+                <strong>Page:</strong> {result.page_number}
+              </p>
+
+              <p>
+                <strong>Chunk:</strong> {result.chunk_index}
+              </p>
+
+              <p>{result.text}</p>
+
+              <p>
+                <strong>Distance:</strong> {result.distance.toFixed(4)}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+
       {error && <p>{error}</p>}
       <div>
         <label>
